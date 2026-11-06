@@ -781,6 +781,12 @@ impl WindowsWindowInner {
         if !self.hide_title_bar || self.state.is_fullscreen() || wparam.0 == 0 {
             return None;
         }
+        // Perora: a pop-up has no frame. Left to the system, a window of style 0 counts as an
+        // overlapped one with borders, and loses 8 px on the left, right and bottom: what is drawn
+        // no longer lines up with the screen beneath it.
+        if self.is_popup {
+            return Some(0);
+        }
 
         unsafe {
             let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
@@ -916,6 +922,18 @@ impl WindowsWindowInner {
                 // SetWindowPos may not send WM_SIZE for maximized windows in some cases,
                 // so we manually update the size to ensure proper rendering
                 let device_size = size(DevicePixels(width), DevicePixels(height));
+                self.handle_size_change(device_size, new_scale_factor, true);
+            }
+        } else if self.is_popup {
+            // Perora: a pop-up was placed in the physical pixels of the display it was meant for.
+            // Moving there from the monitor it was created on brings this message, with a rect
+            // scaled once more: keep the size, and only tell the renderer the new scale.
+            let mut client = RECT::default();
+            if unsafe { GetClientRect(handle, &mut client) }.is_ok() {
+                let device_size = size(
+                    DevicePixels(client.right - client.left),
+                    DevicePixels(client.bottom - client.top),
+                );
                 self.handle_size_change(device_size, new_scale_factor, true);
             }
         } else {

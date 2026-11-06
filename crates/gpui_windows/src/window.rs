@@ -101,6 +101,9 @@ pub(crate) struct WindowsWindowInner {
     system_settings: WindowsSystemSettings,
     pub(crate) handle: AnyWindowHandle,
     pub(crate) hide_title_bar: bool,
+    /// Perora: a `WindowKind::PopUp` window has no frame at all, so its client area is the whole
+    /// window (see `handle_calc_client_size`).
+    pub(crate) is_popup: bool,
     pub(crate) is_movable: bool,
     pub(crate) is_resizable: bool,
     pub(crate) is_minimizable: bool,
@@ -291,6 +294,7 @@ impl WindowsWindowInner {
             state,
             handle: context.handle,
             hide_title_bar: context.hide_title_bar,
+            is_popup: context.is_popup,
             is_movable: context.is_movable,
             is_resizable: context.is_resizable,
             is_minimizable: context.is_minimizable,
@@ -416,6 +420,7 @@ struct WindowCreateContext {
     inner: Option<Result<Rc<WindowsWindowInner>>>,
     handle: AnyWindowHandle,
     hide_title_bar: bool,
+    is_popup: bool,
     display: WindowsDisplay,
     is_movable: bool,
     is_resizable: bool,
@@ -492,7 +497,9 @@ impl WindowsWindow {
         );
 
         let (mut dwexstyle, dwstyle) = if params.kind == WindowKind::PopUp {
-            (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WINDOW_STYLE(0x0))
+            // Perora: `WS_POPUP`, not 0. A window of style 0 is an overlapped one, with a caption
+            // and borders that the placement then makes room for, off by a few pixels.
+            (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WS_POPUP)
         } else {
             let mut dwstyle = WS_SYSMENU;
 
@@ -529,6 +536,7 @@ impl WindowsWindow {
             inner: None,
             handle,
             hide_title_bar,
+            is_popup: params.kind == WindowKind::PopUp,
             display,
             is_movable: params.is_movable,
             is_resizable: params.is_resizable,
